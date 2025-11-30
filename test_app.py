@@ -5,4 +5,4 @@ def test_home():
     resp = client.get("/")
     assert resp.status_code == 200
     # on vérifie juste que le message contient "Hello from Flask"
-    assert b"Hello from Flask CI/CD demo!" in resp.data
+    assert b"Hello from Flask CI/CD demo! je suis hela " in resp.data
