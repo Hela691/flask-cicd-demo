@@ -1,23 +1,45 @@
-name: CD
+name: CD to Kubernetes via Tailscale
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main   
+  workflow_dispatch:
 
 jobs:
-  deploy-to-k8s:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_FILE }}" > ~/.kube/config
+      # 1) Connexion au réseau Tailscale avec l'authkey
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
-      - name: Deploy to Kubernetes
+      # 2) Préparer la clé SSH pour se connecter à la VM
+      - name: Setup SSH key
         run: |
-          kubectl apply -f k8s/deployment.yml
-          kubectl apply -f k8s/service.yml
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # désactiver le prompt "are you sure you want to continue connecting"
+          echo "Host *" > ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+
+      # 3) Copier les manifests Kubernetes sur la VM
+      - name: Copy k8s manifests to VM
+        run: |
+          rsync -avz k8s/ ${{ secrets.VM_SSH_USER }}@${{ secrets.VM_TAILSCALE_IP }}:/home/${{ secrets.VM_SSH_USER }}/app-k8s/
+
+      # 4) Appliquer les manifests dans le cluster depuis la VM
+      - name: Apply manifests on cluster
+        run: |
+          ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.VM_TAILSCALE_IP }} "
+            cd /home/${{ secrets.VM_SSH_USER }}/app-k8s && \
+            kubectl apply -f k8s/deployment.yml && \
+            kubectl apply -f k8s/service.yml
+          "
