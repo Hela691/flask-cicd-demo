@@ -38,8 +38,13 @@ jobs:
       # 4) Appliquer les manifests dans le cluster depuis la VM
       - name: Apply manifests on cluster
         run: |
+          
           ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.VM_TAILSCALE_IP }} "
+            set -e
             cd /home/${{ secrets.VM_SSH_USER }}/app-k8s && \
             kubectl apply -f deployment.yml && \
             kubectl apply -f service.yml
+            echo 'Restarting deployment to pull latest image...' && \
+            kubectl rollout restart deployment flask-cicd-demo && \
+            kubectl rollout status deployment flask-cicd-demo
           "
